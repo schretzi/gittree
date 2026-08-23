@@ -1,0 +1,158 @@
+# goreleaser configuration. See https://goreleaser.com
+#
+# Release flow (see README): tag the commit, push the tag, then run the
+# "Release" workflow manually from the Actions tab and pick that tag. There
+# is deliberately no on-tag-push trigger.
+#
+# Try it locally without publishing anything:
+#     goreleaser check
+#     goreleaser release --snapshot --clean
+version: 2
+
+project_name: gittree
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+    # Man pages and completion scripts are rendered from the cobra command
+    # tree and packaged into every archive, so the Homebrew cask can install
+    # them (see homebrew_casks below) and tarball users get them too.
+    - go run ./tools/gendocs -md docs -man man -completions completions
+
+builds:
+  - id: gittree
+    main: ./cmd/gittree
+    binary: gittree
+    # Pure Go - gittree runs git as a subprocess rather than linking a git
+    # library, so there is no cgo anywhere and every target below
+    # cross-compiles from a single linux runner.
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/schretzi/gittree/internal/cli.version={{ .Version }}
+      - -X github.com/schretzi/gittree/internal/cli.commit={{ .FullCommit }}
+      - -X github.com/schretzi/gittree/internal/cli.date={{ .Date }}
+    mod_timestamp: "{{ .CommitTimestamp }}" # reproducible builds
+
+archives:
+  - id: gittree
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - LICENSE
+      - config.yaml
+      - src: docs/*.md
+        dst: docs
+      - src: man/*.1
+        dst: man
+      - src: completions/*
+        dst: completions
+
+checksum:
+  name_template: checksums.txt
+
+sboms:
+  - artifacts: archive
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Security
+      regexp: '^.*?sec(urity)?(\(.+\))??!?:.+$'
+      order: 2
+    - title: Other
+      order: 99
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+
+# Casks, not formulas: goreleaser deprecated `brews` for binary releases.
+#
+# The generated cask carries Linux URLs too, but Homebrew on Linux does not
+# install casks - so in practice `brew install` is macOS-only here. Linux
+# users take the tarball below, or
+# `go install github.com/schretzi/gittree/cmd/gittree@latest`.
+homebrew_casks:
+  - name: gittree
+    # Publishes to github.com/schretzi/homebrew-tap, so users can
+    # `brew install schretzi/tap/gittree`. That repository must exist, and the
+    # release workflow needs a HOMEBREW_TAP_TOKEN secret with write
+    # access to it (the default GITHUB_TOKEN only covers this repo).
+    repository:
+      owner: schretzi
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/schretzi/gittree
+    description: Browse the state of every git repository under a directory, as a scrollable tree
+    license: MIT
+
+    binaries:
+      - gittree
+    manpages:
+      - man/gittree.1
+      - man/gittree-config.1
+      - man/gittree-config-init.1
+      - man/gittree-config-path.1
+      - man/gittree-list.1
+      - man/gittree-version.1
+    # Paths inside the release archive, placed there by the archives.files
+    # entries above.
+    completions:
+      bash: completions/gittree.bash
+      zsh: completions/gittree.zsh
+      fish: completions/gittree.fish
+
+    commit_author:
+      name: goreleaser
+      email: noreply@github.com
+
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            # The release binaries are not notarized, so Gatekeeper would
+            # otherwise refuse to run them after a browser-less download.
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/gittree"]
+          end
+
+release:
+  draft: false
+  prerelease: auto
+  footer: |
+    ## Install
+
+    ```sh
+    brew install schretzi/tap/gittree
+    ```
+
+    Or grab a binary from the assets below.

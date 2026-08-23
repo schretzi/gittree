@@ -1,0 +1,48 @@
+# gittree configuration.
+#
+# Every setting here is a default; the matching command line flag wins over it.
+# Delete anything you do not want to change.
+
+tool:
+  # What enter hands the terminal to. gittree never changes a repository
+  # itself; this is the program that does.
+  command: lazygit
+  args: []
+  # Drop into $SHELL in the repository when the tool above is not installed.
+  fallback_shell: true
+
+discovery:
+  # How many directory levels below the starting point to search.
+  depth: 8
+  # Descend into a repository to find repositories inside it. Off by default:
+  # submodules already show in their parent's status, and vendored trees are
+  # full of repositories nobody asked about.
+  nested: false
+  # Bare repositories have no working tree, so most of the display is
+  # meaningless for them.
+  include_bare: false
+  # Apply the built-in skip list (node_modules, vendor, Library, ...).
+  ignore_defaults: true
+  # Extra directory names to skip. Added to the built-in list, not replacing it.
+  ignore: []
+
+fetch:
+  # Fetch every repository in the background at startup, so ahead/behind
+  # reflects the remote rather than whenever you last fetched by hand.
+  enabled: true
+  concurrency: 8
+  timeout: 20s
+  # Remove remote-tracking refs whose branch is gone on the remote. Without
+  # this a deleted upstream is reported as "in sync" forever. It only touches
+  # refs/remotes; local branches and tags are never affected.
+  prune: true
+  # Fetch every remote rather than just the current branch's.
+  all: false
+
+scan:
+  # How many repositories to read at once. 0 means one per CPU.
+  concurrency: 0
+
+ui:
+  # Force the ASCII glyph set. By default the locale decides.
+  ascii: false

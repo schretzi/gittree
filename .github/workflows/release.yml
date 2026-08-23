@@ -1,0 +1,49 @@
+name: Release
+
+# Manual only, deliberately. There is no on-tag-push trigger: pushing a tag
+# should not be able to publish a release by accident.
+#
+# The flow is:
+#   git tag -a vX.Y.Z -m "vX.Y.Z"
+#   git push origin vX.Y.Z
+# then Actions -> Release -> Run workflow, selecting that tag in the
+# branch/tag dropdown.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write # goreleaser creates the GitHub release and uploads assets
+
+jobs:
+  release:
+    name: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # goreleaser needs the full history to build a changelog
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - uses: anchore/sbom-action/download-syft@v0 # syft binary goreleaser shells out to for the sboms block
+
+      - name: Verify a tag was selected
+        run: |
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "::error::Run this workflow against a tag, not a branch."
+            echo "Select the vX.Y.Z tag in the 'Use workflow from' dropdown."
+            exit 1
+          fi
+
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Write access to schretzi/homebrew-tap. The default GITHUB_TOKEN
+          # cannot push to another repository, so the formula update needs
+          # its own PAT stored as a repository secret.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
