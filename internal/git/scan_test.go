@@ -122,7 +122,13 @@ func TestScanSyncStates(t *testing.T) {
 	requireGit(t)
 	base := t.TempDir()
 	remote := filepath.Join(base, "remote.git")
-	run(t, base, "init", "-q", "--bare", remote)
+	// -b main is not decoration. Without it the bare repository's HEAD follows
+	// whatever init.defaultBranch the git binary was built with -- "main" on
+	// Apple git, "master" on the upstream build CI runs -- and a clone of a
+	// repository whose HEAD names a ref that does not exist lands on an unborn
+	// branch. The push below then goes to master, origin/main never moves, and
+	// the divergence this test is about never happens.
+	run(t, base, "init", "-q", "-b", "main", "--bare", remote)
 
 	local := newRepo(t, filepath.Join(base, "local"))
 	run(t, local, "remote", "add", "origin", remote)

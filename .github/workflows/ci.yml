@@ -13,7 +13,9 @@ permissions:
   contents: read
 
 env:
+  # Keep these in step with the versions pinned at the top of the Makefile.
   GOLANGCI_VERSION: v2.12.2
+  GOSEC_VERSION: v2.28.0
 
 jobs:
   build-and-test:
@@ -67,9 +69,18 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - uses: securego/gosec@v2.28.0
-        with:
-          args: ./...
+      # `go install` rather than securego/gosec, which is a Docker action: it
+      # runs inside its own image with whatever Go that image was built with,
+      # ignores actions/setup-go, and cannot fetch the toolchain go.mod asks
+      # for because setup-go exports GOTOOLCHAIN=local. It then reports
+      # "Files: 0, Issues: 0" and passes, which is worse than failing.
+      # Installing the pinned version here also makes this job run exactly
+      # what `make sec` runs locally.
+      - name: install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
+
+      - name: gosec
+        run: make sec
 
   dependencies:
     name: Dependency check (govulncheck + go mod tidy/verify)
