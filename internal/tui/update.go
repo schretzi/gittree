@@ -2,10 +2,12 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/schretzi/gittree/internal/git"
 	"github.com/schretzi/gittree/internal/tree"
 )
 
@@ -64,8 +66,21 @@ func (m Model) updateAsync(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case repoScannedMsg:
 		m.repos[msg.repo.Dir] = msg.repo
-		m.status = ""
+		if strings.HasPrefix(m.status, "rescanning") || strings.HasPrefix(m.status, "scanning") {
+			m.status = ""
+		}
 		m.rebuild()
+		return m, nil
+
+	case pullResultMsg:
+		if msg.Err != nil {
+			m.status = fmt.Sprintf("pull failed (%s): %s", msg.Name, git.PullFailure(msg.Err))
+		} else {
+			m.status = "pulled " + msg.Name
+		}
+		if m.cfg.Cmds.ScanOne != nil {
+			return m, m.cfg.Cmds.ScanOne(msg.RepoPath)
+		}
 		return m, nil
 
 	case ToolExitedMsg:
@@ -191,15 +206,13 @@ func (m Model) actionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Rescan):
 		return m.rescanSelected()
 	case key.Matches(msg, m.keys.RescanAll):
-		if len(m.repoPaths) > 0 {
-			m.loading = true
-			m.status = "rescanning…"
-			return m, m.cfg.Cmds.ScanAll(m.repoPaths)
-		}
+		return m.rescanAll()
 	case key.Matches(msg, m.keys.Fetch):
 		return m.fetchSelected()
 	case key.Matches(msg, m.keys.FetchAll):
 		return m, m.startFetch()
+	case key.Matches(msg, m.keys.Pull):
+		return m.pullSelected()
 	case key.Matches(msg, m.keys.DirtyOnly):
 		m.dirtyOnly = !m.dirtyOnly
 		m.rebuild()
@@ -302,11 +315,46 @@ func (m Model) launch() (tea.Model, tea.Cmd) {
 // rescanSelected refreshes just the repository under the cursor.
 func (m Model) rescanSelected() (tea.Model, tea.Cmd) {
 	row, ok := m.selected()
-	if !ok || row.Kind == tree.RowDir {
+	if !ok || row.Kind == tree.RowDir || m.cfg.Cmds.ScanOne == nil {
 		return m, nil
 	}
 	m.status = "rescanning " + row.Node.Name + "…"
 	return m, m.cfg.Cmds.ScanOne(row.Node.Path)
+}
+
+// rescanAll rescans every repository in the tree.
+func (m Model) rescanAll() (tea.Model, tea.Cmd) {
+	if m.cfg.Cmds.Discover != nil {
+		m.loading = true
+		m.status = "rescanning…"
+		return m, m.cfg.Cmds.Discover()
+	}
+	if len(m.repoPaths) > 0 && m.cfg.Cmds.ScanAll != nil {
+		m.loading = true
+		m.status = "rescanning…"
+		return m, m.cfg.Cmds.ScanAll(m.repoPaths)
+	}
+	return m, nil
+}
+
+// pullSelected runs git pull on the repository under the cursor.
+func (m Model) pullSelected() (tea.Model, tea.Cmd) {
+	row, ok := m.selected()
+	if !ok || row.Kind == tree.RowDir || m.cfg.Cmds.Pull == nil {
+		return m, nil
+	}
+	dir := row.Node.Path
+	name := row.Node.Name
+	if row.Kind == tree.RowBranch && row.Branch != nil && row.Branch.Worktree != "" {
+		dir = row.Branch.Worktree
+	}
+	r, scanned := m.repos[row.Node.Path]
+	if scanned && r.Remotes == 0 {
+		m.status = name + " has no remote to pull from"
+		return m, nil
+	}
+	m.status = "pulling " + name + "…"
+	return m, m.cfg.Cmds.Pull(dir, row.Node.Path, name)
 }
 
 func (m *Model) toggle() {

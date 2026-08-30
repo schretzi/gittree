@@ -46,8 +46,7 @@ func TestUsageErrorsAreClassified(t *testing.T) {
 			}
 			// Main maps this classification onto exit code 2; if it is missed,
 			// misuse would be reported as a runtime failure instead.
-			var ue *usageError
-			if !errors.As(err, &ue) {
+			if _, ok := errors.AsType[*usageError](err); !ok {
 				t.Errorf("error %v is not a usageError", err)
 			}
 		})
@@ -156,8 +155,7 @@ func TestListRejectsMissingPath(t *testing.T) {
 		t.Fatal("want an error for a missing path")
 	}
 	// It must be a runtime failure, not a usage error: the syntax was fine.
-	var ue *usageError
-	if errors.As(err, &ue) {
+	if _, ok := errors.AsType[*usageError](err); ok {
 		t.Error("a missing directory should not be classified as misuse")
 	}
 }

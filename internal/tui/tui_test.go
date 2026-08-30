@@ -97,9 +97,19 @@ func newTestModel(t *testing.T, root string) (Model, *stubs) {
 			ScanOne:  func(dir string) tea.Cmd { s.scanOne = append(s.scanOne, dir); return nil },
 			Launch:   func(dir string) tea.Cmd { s.launched = append(s.launched, dir); return nil },
 			Fetch:    func(dirs []string) tea.Cmd { s.fetched = append(s.fetched, dirs); return nil },
+			Pull: func(dir, repoPath, name string) tea.Cmd {
+				s.pulled = append(s.pulled, pullCall{dir: dir, repoPath: repoPath, name: name})
+				return nil
+			},
 		},
 	})
 	return send(t, m, tea.WindowSizeMsg{Width: 100, Height: 20}), s
+}
+
+type pullCall struct {
+	dir      string
+	repoPath string
+	name     string
 }
 
 type stubs struct {
@@ -108,6 +118,7 @@ type stubs struct {
 	scanOne   []string
 	launched  []string
 	fetched   [][]string
+	pulled    []pullCall
 }
 
 // frame renders the view and strips styling, so assertions read as plain text.
@@ -264,6 +275,119 @@ func TestRescanKeyRescansSelected(t *testing.T) {
 	send(t, m, press("r"))
 	if len(s.scanOne) != 1 || s.scanOne[0] != "/w/a" {
 		t.Errorf("scanOne = %v, want [/w/a]", s.scanOne)
+	}
+}
+
+func TestRescanAllKeyRescansAll(t *testing.T) {
+	m, s := newTestModel(t, "/w")
+	m = send(t, m, discoveredMsg{dirs: []string{"/w/a", "/w/b"}})
+	before := s.discovers
+	m = send(t, m, press("R"))
+	if s.discovers != before+1 {
+		t.Errorf("discovers = %d, want %d", s.discovers, before+1)
+	}
+	if !strings.Contains(frame(m), "rescanning") {
+		t.Errorf("status not shown:\n%s", frame(m))
+	}
+}
+
+func TestPullKeyPullsSelected(t *testing.T) {
+	m, s := newTestModel(t, "/w")
+	m = send(t, m,
+		discoveredMsg{dirs: []string{"/w/a"}},
+		scannedMsg{repos: []*git.Repo{repo("/w/a", "main", git.SyncBehind, 0)}},
+	)
+	m = send(t, m, press("p"))
+	if len(s.pulled) != 1 || s.pulled[0].dir != "/w/a" {
+		t.Errorf("pulled = %+v, want [/w/a]", s.pulled)
+	}
+	if !strings.Contains(frame(m), "pulling a") {
+		t.Errorf("status not shown:\n%s", frame(m))
+	}
+}
+
+func TestPullOnDirectoryDoesNothing(t *testing.T) {
+	m, s := newTestModel(t, "/w")
+	m = send(t, m, discoveredMsg{dirs: []string{"/w/p/a", "/w/p/b"}})
+	send(t, m, press("p"))
+	if len(s.pulled) != 0 {
+		t.Errorf("pull on directory ran pull: %+v", s.pulled)
+	}
+}
+
+func TestPullOnBranchInWorktreeUsesWorktreeDir(t *testing.T) {
+	m, s := newTestModel(t, "/w")
+	st := git.Status{Head: "feature", Untracked: 0}
+	r := &git.Repo{
+		Dir:     "/w/a",
+		Status:  st,
+		Remotes: 1,
+		Branches: []git.Branch{
+			{Name: "main", Head: false, Sync: git.SyncInSync, Worktree: "/w/a"},
+			{Name: "feature", Head: true, Sync: git.SyncBehind, Worktree: "/w/worktrees/feature", Status: &st},
+		},
+	}
+	m = send(t, m,
+		discoveredMsg{dirs: []string{"/w/a"}},
+		scannedMsg{repos: []*git.Repo{r}},
+	)
+	// Open repository to reveal branches, move down onto feature branch
+	m = send(t, m, press("right"), press("j"), press("j"))
+	send(t, m, press("p"))
+	if len(s.pulled) != 1 || s.pulled[0].dir != "/w/worktrees/feature" || s.pulled[0].repoPath != "/w/a" {
+		t.Errorf("pulled = %+v, want dir=/w/worktrees/feature repoPath=/w/a", s.pulled)
+	}
+}
+
+func TestPullKeyOnRepoWithNoRemoteSaysSo(t *testing.T) {
+	m, s := newTestModel(t, "/w")
+	m = send(t, m,
+		discoveredMsg{dirs: []string{"/w/solo"}},
+		scannedMsg{repos: []*git.Repo{repo("/w/solo", "main", git.SyncNoUpstream, 0)}},
+	)
+	m = send(t, m, press("p"))
+	if len(s.pulled) != 0 {
+		t.Errorf("pull should not run on repo with no remote: %+v", s.pulled)
+	}
+	if !strings.Contains(frame(m), "no remote to pull from") {
+		t.Errorf("frame should explain why nothing happened:\n%s", frame(m))
+	}
+}
+
+func TestPullSuccessUpdatesStatusAndTriggersRescan(t *testing.T) {
+	m, s := newTestModel(t, "/w")
+	m = send(t, m,
+		discoveredMsg{dirs: []string{"/w/a"}},
+		scannedMsg{repos: []*git.Repo{repo("/w/a", "main", git.SyncBehind, 0)}},
+	)
+	before := len(s.scanOne)
+	m = send(t, m, pullResultMsg{Dir: "/w/a", RepoPath: "/w/a", Name: "a", Err: nil})
+	if len(s.scanOne) != before+1 || s.scanOne[len(s.scanOne)-1] != "/w/a" {
+		t.Errorf("scanOne = %v, want a rescan of /w/a after successful pull", s.scanOne)
+	}
+	if !strings.Contains(frame(m), "pulled a") {
+		t.Errorf("frame should show pulled status:\n%s", frame(m))
+	}
+}
+
+func TestPullFailureUpdatesStatusAndTriggersRescan(t *testing.T) {
+	m, s := newTestModel(t, "/w")
+	m = send(t, m,
+		discoveredMsg{dirs: []string{"/w/a"}},
+		scannedMsg{repos: []*git.Repo{repo("/w/a", "main", git.SyncBehind, 0)}},
+	)
+	before := len(s.scanOne)
+	m = send(t, m, pullResultMsg{
+		Dir:      "/w/a",
+		RepoPath: "/w/a",
+		Name:     "a",
+		Err:      &git.CommandError{Stderr: "error: Your local changes to the following files would be overwritten by merge:\n"},
+	})
+	if len(s.scanOne) != before+1 || s.scanOne[len(s.scanOne)-1] != "/w/a" {
+		t.Errorf("scanOne = %v, want a rescan of /w/a even after failed pull", s.scanOne)
+	}
+	if !strings.Contains(frame(m), "pull failed (a): uncommitted changes") {
+		t.Errorf("frame should show pull failed status:\n%s", frame(m))
 	}
 }
 

@@ -110,8 +110,7 @@ func TestFetchTimesOutOnUnreachableHost(t *testing.T) {
 	}
 	// The reason has to survive as a *CommandError, or the UI has nothing to
 	// show the user beyond "it failed".
-	var cmdErr *CommandError
-	if !errors.As(err, &cmdErr) {
+	if _, ok := errors.AsType[*CommandError](err); !ok {
 		t.Errorf("error %v is not a *CommandError, so the reason cannot be shown", err)
 	}
 }

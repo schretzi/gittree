@@ -58,8 +58,7 @@ func Main(argv []string) int {
 		return exitOK
 	}
 
-	var usageErr *usageError
-	if errors.As(err, &usageErr) {
+	if usageErr, ok := errors.AsType[*usageError](err); ok {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		fmt.Fprint(os.Stderr, usageErr.cmd.UsageString())
 		return exitUsage

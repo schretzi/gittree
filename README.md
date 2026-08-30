@@ -67,6 +67,7 @@ instead of drawing a UI, so `gittree | grep` and `gittree > out.txt` behave.
 | `o`, `s` | open the tool, open a shell |
 | `r`, `R` | rescan this repository, rescan everything |
 | `f`, `F` | fetch this repository, fetch everything |
+| `p` | pull this repository |
 | `d` | show only repositories with uncommitted changes |
 | `?`, `q` | help, quit |
 

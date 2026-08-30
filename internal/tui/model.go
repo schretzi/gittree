@@ -27,6 +27,8 @@ type Commands struct {
 	Launch   func(dir string) tea.Cmd
 	// Fetch is nil when background fetching is switched off.
 	Fetch func(dirs []string) tea.Cmd
+	// Pull runs git pull on a repository.
+	Pull func(dir, repoPath, name string) tea.Cmd
 }
 
 // Config is what the CLI hands the UI at startup.

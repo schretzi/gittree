@@ -29,6 +29,7 @@ type KeyMap struct {
 	RescanAll key.Binding
 	Fetch     key.Binding
 	FetchAll  key.Binding
+	Pull      key.Binding
 
 	DirtyOnly key.Binding
 	Help      key.Binding
@@ -60,6 +61,7 @@ func DefaultKeyMap() KeyMap {
 		RescanAll: key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "rescan all")),
 		Fetch:     key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "fetch")),
 		FetchAll:  key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "fetch all")),
+		Pull:      key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "pull")),
 
 		DirtyOnly: key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "dirty only")),
 		Help:      key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
@@ -69,7 +71,7 @@ func DefaultKeyMap() KeyMap {
 
 // ShortHelp is the one-line hint bar at the bottom of the screen.
 func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Toggle, k.Enter, k.Rescan, k.Help, k.Quit}
+	return []key.Binding{k.Up, k.Down, k.Toggle, k.Enter, k.Pull, k.Rescan, k.Help, k.Quit}
 }
 
 // FullHelp is the expanded help, grouped by what each column is for.
@@ -78,7 +80,7 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{k.Up, k.Down, k.Top, k.Bottom, k.PageUp, k.PageDown},
 		{k.Expand, k.Collapse, k.Toggle, k.ExpandAll, k.CollapseAll},
 		{k.Enter, k.Open, k.Shell},
-		{k.Rescan, k.RescanAll, k.Fetch, k.FetchAll},
+		{k.Rescan, k.RescanAll, k.Fetch, k.FetchAll, k.Pull},
 		{k.DirtyOnly, k.Help, k.Quit},
 	}
 }

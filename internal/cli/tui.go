@@ -78,6 +78,9 @@ func (a *app) commands(ctx context.Context, c git.Client, root string, l launch.
 		ScanAll:  func(dirs []string) tea.Cmd { return tui.ScanAllCmd(ctx, c, dirs, concurrency) },
 		ScanOne:  func(dir string) tea.Cmd { return tui.ScanOneCmd(ctx, c, dir) },
 		Launch:   func(dir string) tea.Cmd { return launchCmd(l, dir) },
+		Pull: func(dir, repoPath, name string) tea.Cmd {
+			return tui.PullCmd(ctx, c, dir, repoPath, name, git.DefaultPullOptions())
+		},
 	}
 	if !a.opts.noFetch {
 		fo := a.fetchOptions()

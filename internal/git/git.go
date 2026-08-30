@@ -80,8 +80,7 @@ func (c Client) run(ctx context.Context, dir string, args ...string) ([]byte, er
 	}
 	if err != nil {
 		e := &CommandError{Args: full, Stderr: truncate(stderr.String()), Err: err}
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			e.ExitCode = exitErr.ExitCode()
 		}
 		return nil, e

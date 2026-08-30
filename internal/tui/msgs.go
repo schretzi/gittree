@@ -47,3 +47,11 @@ type ToolExitedMsg struct {
 	Dir string
 	Err error
 }
+
+// pullResultMsg carries the outcome of a manual git pull.
+type pullResultMsg struct {
+	Dir      string
+	RepoPath string
+	Name     string
+	Err      error
+}

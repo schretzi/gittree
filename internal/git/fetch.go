@@ -117,8 +117,7 @@ func FetchFailure(err error) string {
 	}
 
 	text := err.Error()
-	var ce *CommandError
-	if errors.As(err, &ce) {
+	if ce, ok := errors.AsType[*CommandError](err); ok {
 		// CommandError.Error() leads with the whole argv, which belongs in a
 		// log rather than in a row. git's own complaint is the useful part.
 		text = ce.Stderr

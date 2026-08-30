@@ -53,3 +53,11 @@ func ScanOneCmd(ctx context.Context, c git.Client, dir string) tea.Cmd {
 		return repoScannedMsg{repo: c.Scan(ctx, dir)}
 	}
 }
+
+// PullCmd pulls changes for a single repository.
+func PullCmd(ctx context.Context, c git.Client, dir, repoPath, name string, o git.PullOptions) tea.Cmd {
+	return func() tea.Msg {
+		err := c.Pull(ctx, dir, o)
+		return pullResultMsg{Dir: dir, RepoPath: repoPath, Name: name, Err: err}
+	}
+}
